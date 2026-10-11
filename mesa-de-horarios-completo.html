@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}[hidden]{display:none!important}</style>
+<title>Mesa de Horarios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: slim header and two work surfaces.
+   Horarios = constraint rail (left) + weekly board and publish panel (right), stacking on phones.
+   Aspirantes = stage counters over a scannable list, with a reminder drafter beside it. */
+:root{
+  --font-body:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+
+  --bg:#F2F5F4;
+  --surface:#FFFFFF;
+  --surface-2:#E7EDEB;
+  --line:#D2DBD8;
+  --fg:#13201C;
+  --muted:#566761;
+  --accent:#0E6B5E;
+  --accent-fg:#FFFFFF;
+
+  --ok-bg:#D6EEE2;   --ok-fg:#17583F;
+  --warn-bg:#FBE9CC; --warn-fg:#7A4A05;
+  --bad-bg:#F8DADA;  --bad-fg:#8A1F1F;
+
+  --p1-bg:#DCE8FA; --p1-fg:#1B3F75;
+  --p2-bg:#F8E6C4; --p2-fg:#6B4309;
+  --p3-bg:#F6D9DF; --p3-fg:#7A2236;
+  --p4-bg:#D5EBD9; --p4-fg:#1E5A31;
+  --p5-bg:#E3DCF5; --p5-fg:#43307A;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1715; --surface:#172320; --surface-2:#1F2F2B; --line:#2C3E39;
+    --fg:#E6EFEC; --muted:#93A6A0; --accent:#4FC3AE; --accent-fg:#07221D;
+    --ok-bg:#1B3F31; --ok-fg:#A9E3C8;
+    --warn-bg:#4A3515; --warn-fg:#F5CF8E;
+    --bad-bg:#4B2222; --bad-fg:#F4B8B8;
+    --p1-bg:#1F3350; --p1-fg:#B9D2F5;
+    --p2-bg:#4A3818; --p2-fg:#F2D597;
+    --p3-bg:#4D2430; --p3-fg:#F2BCC8;
+    --p4-bg:#1F4029; --p4-fg:#B5E2BF;
+    --p5-bg:#35295A; --p5-fg:#D2C6F2;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1715; --surface:#172320; --surface-2:#1F2F2B; --line:#2C3E39;
+  --fg:#E6EFEC; --muted:#93A6A0; --accent:#4FC3AE; --accent-fg:#07221D;
+  --ok-bg:#1B3F31; --ok-fg:#A9E3C8;
+  --warn-bg:#4A3515; --warn-fg:#F5CF8E;
+  --bad-bg:#4B2222; --bad-fg:#F4B8B8;
+  --p1-bg:#1F3350; --p1-fg:#B9D2F5;
+  --p2-bg:#4A3818; --p2-fg:#F2D597;
+  --p3-bg:#4D2430; --p3-fg:#F2BCC8;
+  --p4-bg:#1F4029; --p4-fg:#B5E2BF;
+  --p5-bg:#35295A; --p5-fg:#D2C6F2;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.5 var(--font-body);
+  padding-block:20px 56px;
+  padding-inline:clamp(16px,3vw,32px);
+}
+.wrap{max-width:1180px;margin-inline:auto}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* Header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:16px}
+h1{margin:0;font-size:clamp(1.55rem,1.25rem + 1.3vw,2.1rem);line-height:1.1;letter-spacing:-.025em;font-weight:700;text-wrap:balance}
+.sub{margin:6px 0 0;color:var(--muted);max-width:62ch}
+.tag{font:500 .72rem var(--font-mono);text-transform:uppercase;letter-spacing:.08em;padding:5px 9px;border:1px solid var(--line);border-radius:6px;color:var(--muted);white-space:nowrap}
+
+.tabs{display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:10px;width:fit-content;max-width:100%;margin-block:4px 20px}
+.tab{font:inherit;font-weight:600;padding:8px 18px;min-height:40px;border:0;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer}
+.tab[aria-current="page"]{background:var(--surface);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+
+/* Shared parts */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.panel h2,.eyebrow{margin:0 0 12px;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.btn{font:inherit;font-weight:600;font-size:.875rem;padding:8px 14px;min-height:38px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;transition:background .15s,border-color .15s}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08);border-color:transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 10px;min-height:34px;font-size:.8125rem}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.pill.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.pill.neutral{background:var(--surface-2);color:var(--muted)}
+[data-p="1"]{--c-bg:var(--p1-bg);--c-fg:var(--p1-fg)}
+[data-p="2"]{--c-bg:var(--p2-bg);--c-fg:var(--p2-fg)}
+[data-p="3"]{--c-bg:var(--p3-bg);--c-fg:var(--p3-fg)}
+[data-p="4"]{--c-bg:var(--p4-bg);--c-fg:var(--p4-fg)}
+[data-p="5"]{--c-bg:var(--p5-bg);--c-fg:var(--p5-fg)}
+
+/* Horarios */
+.layout{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:20px;align-items:start}
+.ctl{display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.check{display:flex;gap:10px;align-items:center;cursor:pointer}
+.check input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+
+.prof{padding-block:12px;border-top:1px solid var(--line)}
+.prof:first-child{border-top:0;padding-top:0}
+.prof-head{display:flex;align-items:center;gap:8px;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--c-fg);flex:none}
+.prof-name{font-weight:600;min-width:0}
+.prof-meta{margin-left:auto;font:500 .72rem var(--font-mono);color:var(--muted);white-space:nowrap}
+.prof-meta.short{color:var(--warn-fg);background:var(--warn-bg);padding:2px 6px;border-radius:5px}
+.prof-courses{color:var(--muted);font-size:.8125rem;margin:2px 0 8px 18px}
+.days{display:flex;flex-wrap:wrap;gap:4px;margin-left:18px}
+.day-btn{font:500 .78rem var(--font-body);padding:5px 9px;min-height:32px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:6px;cursor:pointer}
+.day-btn[aria-pressed="true"]{background:var(--c-bg);color:var(--c-fg);border-color:var(--c-fg)}
+.day-btn:disabled{opacity:.4;cursor:not-allowed}
+
+.status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px;min-height:28px}
+.status .when{color:var(--muted);font-size:.8125rem}
+.alert{background:var(--warn-bg);color:var(--warn-fg);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.alert strong{display:block;margin-bottom:4px}
+.alert ul{margin:0;padding-left:18px}
+.week{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.day{display:flex;flex-direction:column;gap:6px;min-width:0}
+.day h3{margin:0;font-size:.9rem;font-weight:600;display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.day h3 small{font:400 .7rem var(--font-mono);color:var(--muted)}
+.slot{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:108px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.slot-time{font:500 .7rem var(--font-mono);color:var(--muted);letter-spacing:.02em}
+.chip{background:var(--c-bg);color:var(--c-fg);border-radius:6px;padding:6px 8px;font-size:.78rem;line-height:1.25;min-width:0}
+.chip strong{display:block;font-weight:600;overflow-wrap:break-word}
+.chip span{display:block;margin-top:2px;font-size:.72rem}
+.free{margin:auto;color:var(--muted);font-size:.75rem}
+
+.publish{margin-top:20px}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.seg .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.out{display:block;width:100%;min-height:230px;font:400 .8125rem/1.55 var(--font-mono);background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;resize:vertical}
+.pub-foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:10px}
+.hint{color:var(--muted);font-size:.8125rem;flex:1 1 240px;margin:0}
+
+/* Aspirantes */
+.apps-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:20px;align-items:start}
+.counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-bottom:16px}
+.counter{font:inherit;text-align:left;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.counter[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.counter .n{font:600 1.5rem/1.1 var(--font-mono)}
+.counter .l{font-size:.78rem;color:var(--muted)}
+.bar{display:block;height:4px;border-radius:2px;background:var(--surface-2);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:12px}
+.search{flex:1 1 200px;min-width:0;font:inherit;padding:9px 12px;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)}
+.summary{color:var(--muted);font-size:.8125rem;margin:0 0 8px}
+.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.app{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;padding:12px 14px;border-top:1px solid var(--line);align-items:center}
+.app:first-child{border-top:0}
+.app[data-sel="true"]{background:var(--surface-2)}
+.app-main{min-width:0}
+.app-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.app-name{font-weight:600}
+.app-id{font:400 .75rem var(--font-mono);color:var(--muted)}
+.stage{display:inline-flex;align-items:center;gap:7px;font-size:.8125rem;font-weight:600}
+.steps{display:inline-flex;gap:2px}
+.steps i{width:6px;height:11px;border-radius:2px;background:var(--line)}
+.steps i.on{background:var(--accent)}
+.contact{color:var(--muted);font-size:.8125rem}
+.app-next{color:var(--muted);font-size:.8125rem;margin-top:3px}
+.app-act{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.msg{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px)}
+.msg .who{font-weight:600;margin:0 0 10px}
+.msg .out{min-height:210px;font-family:var(--font-body);font-size:.875rem;line-height:1.5}
+.foot{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:.8125rem;max-width:70ch}
+
+@media (max-width:900px){
+  .layout,.apps-layout{grid-template-columns:minmax(0,1fr)}
+  .msg{position:static}
+}
+@media (max-width:560px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .app-act{justify-content:flex-start}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Mesa de Horarios</h1>
+      <p class="sub">Horarios de profesores y seguimiento de aspirantes para una maestría. Todo lo que ves es una demostración con datos inventados.</p>
+    </div>
+    <span class="tag">Datos de ejemplo</span>
+  </header>
+
+  <nav class="tabs" aria-label="Vista">
+    <button class="tab" type="button" data-tab="horarios" aria-current="page">Horarios</button>
+    <button class="tab" type="button" data-tab="aspirantes">Aspirantes</button>
+  </nav>
+
+  <main>
+    <section id="tab-horarios" aria-label="Horarios">
+      <div class="layout">
+        <aside class="panel">
+          <h2>Restricciones</h2>
+          <div class="ctl">
+            <label class="check" for="sat"><input type="checkbox" id="sat" checked> Incluir sábados</label>
+            <button class="btn" type="button" id="reseed">Proponer otra distribución</button>
+          </div>
+          <h2>Días disponibles por profesor</h2>
+          <div id="profs"></div>
+        </aside>
+
+        <div class="main-col">
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+          <div id="alert"></div>
+          <div class="week" id="week"></div>
+
+          <section class="panel publish" aria-label="Publicar">
+            <h2>Publicar el horario</h2>
+            <div class="seg" id="seg" role="group" aria-label="Formato de publicación"></div>
+            <label class="sr-only" for="out">Texto para publicar</label>
+            <textarea class="out" id="out" readonly></textarea>
+            <div class="pub-foot">
+              <p class="hint" id="hint"></p>
+              <button class="btn primary" type="button" id="copy">Copiar texto</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-aspirantes" aria-label="Aspirantes" hidden>
+      <div class="apps-layout">
+        <div>
+          <div class="counters" id="counters" role="group" aria-label="Filtrar por etapa"></div>
+          <div class="toolbar">
+            <label class="sr-only" for="q">Buscar aspirante</label>
+            <input class="search" id="q" type="search" placeholder="Buscar por nombre, folio o línea">
+            <label class="check" for="od"><input type="checkbox" id="od"> Solo seguimiento vencido</label>
+          </div>
+          <p class="summary" id="summary"></p>
+          <ul class="list" id="list"></ul>
+        </div>
+
+        <aside class="panel msg" aria-label="Recordatorio">
+          <h2>Recordatorio</h2>
+          <p class="who" id="msg-who"></p>
+          <label class="sr-only" for="msg-out">Mensaje</label>
+          <textarea class="out" id="msg-out"></textarea>
+          <div class="pub-foot">
+            <p class="hint">Se redacta según la etapa. Puedes editarlo antes de copiarlo a correo o WhatsApp.</p>
+            <button class="btn primary" type="button" id="msg-copy">Copiar mensaje</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <p class="foot">Esta página es una demostración sin conexión a tus sistemas. Con tus datos reales, la misma lógica puede partir de una hoja de cálculo o un formulario de registro y dejar listos los textos y calendarios para cada aplicación.</p>
+  <div class="sr-only" id="live" aria-live="polite"></div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- Datos de ejemplo ---------- */
+  const AULAS = 2;
+  const SEM = '2027-2';
+  const PROGRAMA = 'Maestría en Ingeniería (ejemplo)';
+  const DAYS = [
+    {k:'Lun', full:'Lunes', date:25},
+    {k:'Mar', full:'Martes', date:26},
+    {k:'Mié', full:'Miércoles', date:27},
+    {k:'Jue', full:'Jueves', date:28},
+    {k:'Vie', full:'Viernes', date:29},
+    {k:'Sáb', full:'Sábado', date:30}
+  ];
+  const TIMES = [['17:00','19:00'],['19:00','21:00']];
+  const TIMES_SAT = [['09:00','11:00'],['11:00','13:00']];
+  const timesFor = d => d === 5 ? TIMES_SAT : TIMES;
+
+  const PROFS = [
+    {id:1, name:'Dra. Núñez',    days:[1,1,1,1,0,0]},
+    {id:2, name:'Dr. Salgado',   days:[0,1,0,1,1,1]},
+    {id:3, name:'Mtra. Ibarra',  days:[1,0,1,0,1,0]},
+    {id:4, name:'Dr. Cervantes', days:[1,1,1,1,1,0]},
+    {id:5, name:'Dra. Lozano',   days:[0,0,1,1,1,1]}
+  ].map(p => Object.assign({}, p, {days:p.days.map(Boolean)}));
+
+  const COURSES = [
+    {id:'c1', name:'Métodos numéricos', prof:1, blocks:2},
+    {id:'c2', name:'Optimización', prof:1, blocks:2},
+    {id:'c3', name:'Geomática aplicada', prof:2, blocks:2},
+    {id:'c4', name:'Seminario de investigación I', prof:2, blocks:1},
+    {id:'c5', name:'Gestión de proyectos', prof:3, blocks:2},
+    {id:'c6', name:'Metodología de la investigación', prof:3, blocks:1},
+    {id:'c7', name:'Estadística avanzada', prof:4, blocks:2},
+    {id:'c8', name:'Modelado de información BIM', prof:5, blocks:2}
+  ];
+
+  const state = {seed:1, sat:true, fmt:'whatsapp', result:null, problems:[]};
+  const profById = id => PROFS.find(p => p.id === id);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const nDaysNow = () => state.sat ? 6 : 5;
+  const slotTime = slot => { const t = timesFor(slot >> 1)[slot & 1]; return t[0] + '–' + t[1]; };
+
+  /* ---------- Generador de horarios ---------- */
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function solve(){
+    const rand = mulberry32(state.seed * 7919 + 13);
+    const nDays = nDaysNow();
+    const sessions = [];
+    COURSES.forEach(c => { for(let k = 0; k < c.blocks; k++) sessions.push({course:c, k:k}); });
+    sessions.forEach(s => {
+      const p = profById(s.course.prof);
+      const cand = [];
+      for(let d = 0; d < nDays; d++){
+        if(!p.days[d]) continue;
+        for(let b = 0; b < 2; b++) cand.push(d * 2 + b);
+      }
+      s.cand = cand;
+    });
+    sessions.sort((a, b) => a.cand.length - b.cand.length || b.course.blocks - a.course.blocks);
+
+    const slotUse = new Array(12).fill(0);
+    const dayLoad = new Array(6).fill(0);
+    const profBusy = {}; PROFS.forEach(p => { profBusy[p.id] = new Set(); });
+    const courseDays = {}; COURSES.forEach(c => { courseDays[c.id] = new Set(); });
+    const placed = new Array(sessions.length);
+    let steps = 0;
+    const LIMIT = 60000;
+
+    function score(s, slot){
+      const d = slot >> 1;
+      let sc = dayLoad[d] * 10 + rand() * 8;
+      courseDays[s.course.id].forEach(d0 => { if(Math.abs(d0 - d) === 1) sc += 6; });
+      return sc;
+    }
+
+    function rec(i){
+      if(i === sessions.length) return true;
+      if(++steps > LIMIT) return false;
+      const s = sessions[i];
+      const pid = s.course.prof;
+      const opts = s.cand
+        .filter(slot => slotUse[slot] < AULAS && !profBusy[pid].has(slot) && !courseDays[s.course.id].has(slot >> 1))
+        .map(slot => ({slot:slot, sc:score(s, slot)}))
+        .sort((a, b) => a.sc - b.sc);
+      for(const o of opts){
+        const slot = o.slot, d = slot >> 1;
+        slotUse[slot]++; dayLoad[d]++;
+        profBusy[pid].add(slot); courseDays[s.course.id].add(d);
+        placed[i] = {course:s.course, slot:slot, aula:slotUse[slot]};
+        if(rec(i + 1)) return true;
+        slotUse[slot]--; dayLoad[d]--;
+        profBusy[pid].delete(slot); courseDays[s.course.id].delete(d);
+      }
+      return false;
+    }
+
+    if(rec(0)) return {ok:true, items:placed.slice(), total:sessions.length};
+    return {ok:false, items:[], total:sessions.length, messages:diagnose()};
+  }
+
+  function diagnose(){
+    const msgs = [];
+    const nDays = nDaysNow();
+    PROFS.forEach(p => {
+      const mine = COURSES.filter(c => c.prof === p.id);
+      const need = mine.reduce((a, c) => a + c.blocks, 0);
+      const open = p.days.slice(0, nDays).filter(Boolean).length;
+      if(need > open * 2) msgs.push(p.name + ' necesita ' + need + ' bloques y tiene ' + (open * 2) + ' disponibles. Abre otro día.');
+      mine.filter(c => c.blocks > open).forEach(c => msgs.push(c.name + ' pide ' + c.blocks + ' días distintos y ' + p.name + ' tiene ' + open + (open === 1 ? ' día abierto.' : ' días abiertos.')));
+    });
+    if(!msgs.length) msgs.push('Cada profesor tiene bloques suficientes, pero coinciden en los mismos horarios. Abre más días o incluye los sábados.');
+    return msgs;
+  }
+
+  function validate(items){
+    const problems = [];
+    const bySlot = {}, profSlot = {}, courseDay = {};
+    items.forEach(it => {
+      const p = profById(it.course.prof);
+      (bySlot[it.slot] = bySlot[it.slot] || []).push(it);
+      const pk = p.id + ':' + it.slot;
+      if(profSlot[pk]) problems.push(p.name + ' tiene dos materias a la misma hora');
+      profSlot[pk] = 1;
+      if(!p.days[it.slot >> 1]) problems.push(p.name + ' no está disponible ese día');
+      const ck = it.course.id + ':' + (it.slot >> 1);
+      if(courseDay[ck]) problems.push(it.course.name + ' se repite el mismo día');
+      courseDay[ck] = 1;
+    });
+    Object.keys(bySlot).forEach(k => {
+      const list = bySlot[k];
+      const aulas = new Set(list.map(x => x.aula));
+      if(list.length > AULAS || aulas.size !== list.length) problems.push('Dos materias comparten aula');
+    });
+    return problems;
+  }
+
+  /* ---------- Textos para publicar ---------- */
+  function sortedItems(){
+    return state.result.items.slice().sort((a, b) => a.slot - b.slot || a.aula - b.aula);
+  }
+  function byDay(){
+    const items = sortedItems();
+    return DAYS.map((_, d) => items.filter(it => (it.slot >> 1) === d));
+  }
+  function icsEsc(s){ return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,'); }
+
+  function buildText(fmt){
+    const days = byDay();
+    let out = '';
+    if(fmt === 'whatsapp'){
+      out = '*Horario ' + SEM + ' · ' + PROGRAMA + '*\nInicio de clases: lunes 25 de enero de 2027\n';
+      days.forEach((list, d) => {
+        if(!list.length) return;
+        out += '\n*' + DAYS[d].full + '*\n';
+        list.forEach(it => {
+          out += '• ' + slotTime(it.slot) + ' ' + it.course.name + ' (' + profById(it.course.prof).name + ', Aula ' + it.aula + ')\n';
+        });
+      });
+      out += '\nSi detectas un choque, responde a este mensaje.';
+    } else if(fmt === 'correo'){
+      out = 'Asunto: Horario ' + SEM + ' · ' + PROGRAMA + '\n\nEstimadas y estimados profesores:\n\n' +
+        'Comparto el horario propuesto para el semestre ' + SEM + '. Las clases inician el lunes 25 de enero de 2027.\n';
+      days.forEach((list, d) => {
+        if(!list.length) return;
+        out += '\n' + DAYS[d].full + '\n';
+        list.forEach(it => {
+          out += '  ' + slotTime(it.slot) + ' · ' + it.course.name + ' · ' + profById(it.course.prof).name + ' · Aula ' + it.aula + '\n';
+        });
+      });
+      out += '\nSi detectan un choque o necesitan un cambio, respondan a este correo.\n\nSaludos,\nCoordinación de la maestría';
+    } else if(fmt === 'hoja'){
+      const rows = [['Día','Inicio','Fin','Materia','Profesor','Aula']];
+      sortedItems().forEach(it => {
+        const t = timesFor(it.slot >> 1)[it.slot & 1];
+        rows.push([DAYS[it.slot >> 1].full, t[0], t[1], it.course.name, profById(it.course.prof).name, 'Aula ' + it.aula]);
+      });
+      out = rows.map(r => r.join('\t')).join('\n');
+    } else {
+      const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Mesa de Horarios//ES','CALSCALE:GREGORIAN'];
+      sortedItems().forEach(it => {
+        const d = it.slot >> 1;
+        const t = timesFor(d)[it.slot & 1];
+        const day = '202701' + String(DAYS[d].date);
+        lines.push('BEGIN:VEVENT',
+          'UID:' + it.course.id + '-' + it.slot + '@mesa-de-horarios',
+          'DTSTAMP:20261010T180000Z',
+          'DTSTART:' + day + 'T' + t[0].replace(':', '') + '00',
+          'DTEND:' + day + 'T' + t[1].replace(':', '') + '00',
+          'RRULE:FREQ=WEEKLY;COUNT=16',
+          'SUMMARY:' + icsEsc(it.course.name),
+          'LOCATION:Aula ' + it.aula,
+          'DESCRIPTION:' + icsEsc(profById(it.course.prof).name),
+          'END:VEVENT');
+      });
+      lines.push('END:VCALENDAR');
+      out = lines.join('\r\n');
+    }
+    return out;
+  }
+
+  const FORMATS = [
+    {k:'whatsapp', label:'WhatsApp', hint:'Pégalo en el grupo de profesores. Los asteriscos activan la negrita.'},
+    {k:'correo', label:'Correo', hint:'Pégalo en el cuerpo del mensaje. La primera línea es el asunto.'},
+    {k:'hoja', label:'Hoja de cálculo', hint:'Pégalo en la celda A1 de Excel o de Hojas de cálculo de Google.'},
+    {k:'ics', label:'Calendario (.ics)', hint:'Guárdalo como horario.ics e impórtalo en Google Calendar u Outlook. Cada clase se repite 16 semanas de ejemplo.'}
+  ];
+
+  /* ---------- Aspirantes: datos y reglas ---------- */
+  const STAGES = ['Registro','Documentos','Entrevista','Examen','Admitido'];
+  const TODAY_LABEL = '10 oct 2026';
+  const OVERDUE_DAYS = 7;
+  const apps = [
+    {id:'ASP-101', name:'Valeria M.', line:'Geomática', stage:0, daysAgo:2, missing:[]},
+    {id:'ASP-102', name:'Ricardo T.', line:'Estructuras', stage:1, daysAgo:9, missing:['acta de nacimiento','carta de motivos']},
+    {id:'ASP-103', name:'Daniela P.', line:'Hidráulica', stage:2, daysAgo:3, missing:[]},
+    {id:'ASP-104', name:'Emilio G.', line:'Gestión de proyectos', stage:1, daysAgo:5, missing:['constancia de idioma']},
+    {id:'ASP-105', name:'Sofía L.', line:'Geomática', stage:3, daysAgo:1, missing:[]},
+    {id:'ASP-106', name:'Andrés C.', line:'Estructuras', stage:0, daysAgo:8, missing:[]},
+    {id:'ASP-107', name:'Mariana H.', line:'Geomática', stage:4, daysAgo:4, missing:[]},
+    {id:'ASP-108', name:'Julián R.', line:'Hidráulica', stage:1, daysAgo:12, missing:['certificado de estudios','CV']},
+    {id:'ASP-109', name:'Paola S.', line:'Gestión de proyectos', stage:2, daysAgo:7, missing:[]},
+    {id:'ASP-110', name:'Héctor V.', line:'Estructuras', stage:3, daysAgo:10, missing:[]},
+    {id:'ASP-111', name:'Camila D.', line:'Geomática', stage:2, daysAgo:1, missing:[]},
+    {id:'ASP-112', name:'Iván O.', line:'Hidráulica', stage:0, daysAgo:6, missing:[]},
+    {id:'ASP-113', name:'Lucía F.', line:'Gestión de proyectos', stage:4, daysAgo:2, missing:[]},
+    {id:'ASP-114', name:'Tomás B.', line:'Estructuras', stage:1, daysAgo:3, missing:['título o acta de examen profesional']}
+  ];
+  const appState = {filter:'all', q:'', overdue:false, sel:'ASP-108'};
+
+  const isOver = a => a.stage < 4 && a.daysAgo > OVERDUE_DAYS;
+  function listEs(arr){
+    if(arr.length <= 1) return arr.join('');
+    return arr.slice(0, -1).join(', ') + ' y ' + arr[arr.length - 1];
+  }
+  function nextStep(a){
+    if(a.stage === 0) return 'Enviar la lista de documentos';
+    if(a.stage === 1) return a.missing.length ? 'Pedir: ' + listEs(a.missing) : 'Validar documentos con el comité';
+    if(a.stage === 2) return 'Agendar la entrevista con el comité';
+    if(a.stage === 3) return 'Confirmar fecha y sede del examen';
+    return 'Enviar carta de aceptación e instrucciones de inscripción';
+  }
+  function advanceLabel(a){
+    if(a.stage === 4) return null;
+    if(a.stage === 1 && a.missing.length) return 'Docs recibidos';
+    return 'Pasar a ' + STAGES[a.stage + 1];
+  }
+  function buildMessage(a){
+    const n = a.name.split(' ')[0];
+    if(a.stage === 0) return 'Hola ' + n + ', gracias por registrarte en la ' + PROGRAMA.replace(' (ejemplo)', '') + '. Para continuar necesitamos tus documentos: acta de nacimiento, título o acta de examen profesional, certificado de estudios, CV y carta de motivos. Si tienes dudas, responde este mensaje.';
+    if(a.stage === 1) return a.missing.length
+      ? 'Hola ' + n + ', revisamos tu expediente y todavía faltan: ' + listEs(a.missing) + '. ¿Puedes enviarlos esta semana? Con eso podemos pasar a la entrevista.'
+      : 'Hola ' + n + ', recibimos tus documentos completos. Te avisamos en cuanto el comité confirme la fecha de tu entrevista.';
+    if(a.stage === 2) return 'Hola ' + n + ', tu entrevista con el comité sigue pendiente de agendar. ¿Qué días de la próxima semana, por la tarde, te acomodan?';
+    if(a.stage === 3) return 'Hola ' + n + ', por favor confirma que presentarás el examen de admisión. En cuanto tengamos sede y horario te los enviamos por este medio.';
+    return 'Hola ' + n + ', felicidades: fuiste admitido a la ' + PROGRAMA.replace(' (ejemplo)', '') + '. En un mensaje aparte te enviaremos la carta de aceptación y los pasos para tu inscripción.';
+  }
+
+  /* Exportación para pruebas en Node */
+  if(typeof module !== 'undefined'){
+    module.exports = {state, solve, validate, diagnose, PROFS, COURSES, buildText, apps, buildMessage, nextStep, isOver, advanceLabel};
+  }
+  if(typeof document === 'undefined') return;
+
+  /* ---------- Interfaz ---------- */
+  const $ = id => document.getElementById(id);
+  const el = {
+    profs:$('profs'), status:$('status'), alert:$('alert'), week:$('week'), seg:$('seg'), out:$('out'), hint:$('hint'),
+    copy:$('copy'), sat:$('sat'), reseed:$('reseed'), live:$('live'),
+    counters:$('counters'), list:$('list'), summary:$('summary'), q:$('q'), od:$('od'),
+    msgWho:$('msg-who'), msgOut:$('msg-out'), msgCopy:$('msg-copy'), msg:document.querySelector('.msg')
+  };
+  const say = t => { el.live.textContent = ''; setTimeout(() => { el.live.textContent = t; }, 30); };
+  const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  async function copyFrom(ta, btn, idle){
+    const text = ta.value;
+    try{
+      await navigator.clipboard.writeText(text);
+      btn.textContent = 'Copiado';
+      say('Texto copiado');
+    }catch(e){
+      ta.focus(); ta.select();
+      btn.textContent = 'Seleccionado: usa Ctrl+C';
+    }
+    setTimeout(() => { btn.textContent = idle; }, 1800);
+  }
+
+  /* Horarios */
+  function regenerate(){
+    state.result = solve();
+    state.problems = state.result.ok ? validate(state.result.items) : [];
+    renderRail(); renderBoard(); renderPublish();
+  }
+
+  function renderRail(){
+    const nDays = nDaysNow();
+    el.profs.innerHTML = PROFS.map(p => {
+      const mine = COURSES.filter(c => c.prof === p.id);
+      const need = mine.reduce((a, c) => a + c.blocks, 0);
+      const have = p.days.slice(0, nDays).filter(Boolean).length * 2;
+      const btns = DAYS.map((d, i) =>
+        '<button type="button" class="day-btn" data-pid="' + p.id + '" data-day="' + i + '" aria-pressed="' + p.days[i] + '"' +
+        (i >= nDays ? ' disabled' : '') + ' aria-label="' + esc(p.name + ', ' + d.full) + '">' + d.k + '</button>').join('');
+      return '<div class="prof" data-p="' + p.id + '">' +
+        '<div class="prof-head"><span class="dot"></span><span class="prof-name">' + esc(p.name) + '</span>' +
+        '<span class="prof-meta' + (need > have ? ' short' : '') + '">' + need + ' de ' + have + ' bloques</span></div>' +
+        '<div class="prof-courses">' + mine.map(c => esc(c.name)).join(' · ') + '</div>' +
+        '<div class="days" role="group" aria-label="Días disponibles de ' + esc(p.name) + '">' + btns + '</div></div>';
+    }).join('');
+  }
+
+  function renderBoard(){
+    const r = state.result;
+    const nDays = nDaysNow();
+    let st;
+    if(r.ok){
+      const bad = state.problems.length;
+      st = '<span class="pill ' + (bad ? 'bad' : 'ok') + '">' + (bad ? bad + ' choques' : 'Sin choques de profesor ni aula') + '</span>' +
+           '<span class="pill neutral mono">' + r.items.length + ' de ' + r.total + ' sesiones</span>' +
+           '<span class="when">Semestre ' + SEM + ' · ' + AULAS + ' aulas · bloques de 2 h</span>';
+      el.alert.innerHTML = '';
+    }else{
+      st = '<span class="pill bad">Sin solución</span><span class="when">Semestre ' + SEM + '</span>';
+      el.alert.innerHTML = '<div class="alert" role="alert"><strong>Con estos días no cabe el horario.</strong><ul>' +
+        r.messages.map(m => '<li>' + esc(m) + '</li>').join('') + '</ul></div>';
+    }
+    el.status.innerHTML = st;
+
+    let html = '';
+    for(let d = 0; d < nDays; d++){
+      html += '<section class="day"><h3>' + DAYS[d].full + '<small>' + DAYS[d].date + ' ene</small></h3>';
+      for(let b = 0; b < 2; b++){
+        const slot = d * 2 + b;
+        const here = r.ok ? r.items.filter(it => it.slot === slot).sort((x, y) => x.aula - y.aula) : [];
+        html += '<div class="slot"><div class="slot-time">' + slotTime(slot) + '</div>' +
+          (here.length ? here.map(it => {
+            const p = profById(it.course.prof);
+            return '<div class="chip" data-p="' + p.id + '"><strong>' + esc(it.course.name) + '</strong><span>' + esc(p.name) + ' · Aula ' + it.aula + '</span></div>';
+          }).join('') : '<div class="free">Libre</div>') + '</div>';
+      }
+      html += '</section>';
+    }
+    el.week.innerHTML = html;
+  }
+
+  function renderPublish(){
+    el.seg.innerHTML = FORMATS.map(f =>
+      '<button type="button" class="btn sm" data-fmt="' + f.k + '" aria-pressed="' + (state.fmt === f.k) + '">' + esc(f.label) + '</button>').join('');
+    const f = FORMATS.find(x => x.k === state.fmt);
+    el.hint.textContent = f.hint;
+    if(state.result.ok){
+      el.out.value = buildText(state.fmt);
+      el.copy.disabled = false;
+    }else{
+      el.out.value = 'Primero resuelve las restricciones del panel izquierdo. Cuando el horario no tenga choques, aquí aparece el texto listo para pegar.';
+      el.copy.disabled = true;
+    }
+  }
+
+  el.profs.addEventListener('click', e => {
+    const b = e.target.closest('.day-btn');
+    if(!b || b.disabled) return;
+    const p = profById(Number(b.dataset.pid));
+    const d = Number(b.dataset.day);
+    p.days[d] = !p.days[d];
+    regenerate();
+    const again = el.profs.querySelector('[data-pid="' + p.id + '"][data-day="' + d + '"]');
+    if(again) again.focus();
+  });
+  el.sat.addEventListener('change', () => { state.sat = el.sat.checked; regenerate(); });
+  el.reseed.addEventListener('click', () => { state.seed++; regenerate(); say('Nueva distribución propuesta'); });
+  el.seg.addEventListener('click', e => {
+    const b = e.target.closest('[data-fmt]');
+    if(!b) return;
+    state.fmt = b.dataset.fmt;
+    renderPublish();
+    const again = el.seg.querySelector('[data-fmt="' + state.fmt + '"]');
+    if(again) again.focus();
+  });
+  el.copy.addEventListener('click', () => copyFrom(el.out, el.copy, 'Copiar texto'));
+
+  /* Aspirantes */
+  function filtered(){
+    const q = appState.q.trim().toLowerCase();
+    return apps.filter(a => {
+      if(appState.filter !== 'all' && String(a.stage) !== appState.filter) return false;
+      if(appState.overdue && !isOver(a)) return false;
+      if(q && (a.name + ' ' + a.id + ' ' + a.line).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort((x, y) => (isOver(y) - isOver(x)) || (y.daysAgo - x.daysAgo) || x.id.localeCompare(y.id));
+  }
+
+  function renderCounters(){
+    const counts = STAGES.map((_, i) => apps.filter(a => a.stage === i).length);
+    const max = Math.max.apply(null, counts.concat([1]));
+    const items = [{key:'all', label:'Todos', n:apps.length, w:100}].concat(
+      STAGES.map((s, i) => ({key:String(i), label:s, n:counts[i], w:counts[i] / max * 100})));
+    el.counters.innerHTML = items.map(it =>
+      '<button type="button" class="counter" data-filter="' + it.key + '" aria-pressed="' + (appState.filter === it.key) + '">' +
+      '<span class="n">' + it.n + '</span><span class="l">' + esc(it.label) + '</span>' +
+      '<span class="bar"><i style="width:' + it.w + '%"></i></span></button>').join('');
+  }
+
+  function appHTML(a){
+    const od = isOver(a);
+    const steps = STAGES.map((_, i) => '<i class="' + (i <= a.stage ? 'on' : '') + '"></i>').join('');
+    const contact = od
+      ? '<span class="pill warn">' + a.daysAgo + ' d sin contacto</span>'
+      : '<span class="contact">' + (a.daysAgo === 0 ? 'Contacto hoy' : 'Contacto hace ' + a.daysAgo + ' d') + '</span>';
+    const adv = advanceLabel(a);
+    return '<li class="app" data-sel="' + (appState.sel === a.id) + '">' +
+      '<div class="app-main"><div class="app-top">' +
+      '<span class="app-name">' + esc(a.name) + '</span><span class="app-id">' + esc(a.id) + ' · ' + esc(a.line) + '</span>' +
+      '<span class="stage"><span class="steps" aria-hidden="true">' + steps + '</span>' + esc(STAGES[a.stage]) + '</span>' + contact +
+      '</div><div class="app-next">' + esc(nextStep(a)) + '</div></div>' +
+      '<div class="app-act">' +
+      '<button type="button" class="btn sm" data-act="remind" data-id="' + a.id + '">Recordatorio</button>' +
+      (adv ? '<button type="button" class="btn sm primary" data-act="advance" data-id="' + a.id + '">' + esc(adv) + '</button>'
+           : '<button type="button" class="btn sm" disabled>Proceso completo</button>') +
+      '</div></li>';
+  }
+
+  function renderList(){
+    const rows = filtered();
+    const overCount = apps.filter(isOver).length;
+    el.summary.textContent = rows.length + ' de ' + apps.length + ' aspirantes · ' + overCount + ' con seguimiento vencido (más de ' + OVERDUE_DAYS + ' días) · datos al ' + TODAY_LABEL;
+    el.list.innerHTML = rows.length ? rows.map(appHTML).join('') : '<li class="empty">Ningún aspirante coincide con el filtro.</li>';
+  }
+
+  function renderMsg(){
+    const a = apps.find(x => x.id === appState.sel);
+    if(!a){ el.msgWho.textContent = 'Elige un aspirante'; el.msgOut.value = ''; return; }
+    el.msgWho.textContent = a.name + ' · ' + a.id + ' · ' + STAGES[a.stage];
+    el.msgOut.value = buildMessage(a);
+  }
+
+  function refocus(sel){ const n = el.list.querySelector(sel); if(n) n.focus(); }
+
+  el.counters.addEventListener('click', e => {
+    const b = e.target.closest('[data-filter]');
+    if(!b) return;
+    appState.filter = b.dataset.filter;
+    renderCounters(); renderList();
+    const again = el.counters.querySelector('[data-filter="' + appState.filter + '"]');
+    if(again) again.focus();
+  });
+  el.q.addEventListener('input', () => { appState.q = el.q.value; renderList(); });
+  el.od.addEventListener('change', () => { appState.overdue = el.od.checked; renderList(); });
+  el.list.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]');
+    if(!b || b.disabled) return;
+    const a = apps.find(x => x.id === b.dataset.id);
+    if(!a) return;
+    if(b.dataset.act === 'remind'){
+      appState.sel = a.id;
+      renderList(); renderMsg();
+      refocus('button[data-act="remind"][data-id="' + a.id + '"]');
+      if(window.matchMedia && window.matchMedia('(max-width:900px)').matches){
+        el.msg.scrollIntoView({block:'nearest', behavior: reduceMotion() ? 'auto' : 'smooth'});
+      }
+    }else{
+      if(a.stage === 1 && a.missing.length){
+        a.missing = [];
+        say(a.name + ': documentos completos');
+      }else{
+        a.stage = Math.min(4, a.stage + 1);
+        a.missing = [];
+        say(a.name + ' pasó a ' + STAGES[a.stage]);
+      }
+      a.daysAgo = 0;
+      appState.sel = a.id;
+      renderCounters(); renderList(); renderMsg();
+      refocus('button[data-act="advance"][data-id="' + a.id + '"], button[data-act="remind"][data-id="' + a.id + '"]');
+    }
+  });
+  el.msgCopy.addEventListener('click', () => copyFrom(el.msgOut, el.msgCopy, 'Copiar mensaje'));
+
+  /* Pestañas */
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => {
+      if(x === t) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current');
+    });
+    $('tab-horarios').hidden = t.dataset.tab !== 'horarios';
+    $('tab-aspirantes').hidden = t.dataset.tab !== 'aspirantes';
+  }));
+
+  regenerate();
+  renderCounters(); renderList(); renderMsg();
+})();
+</script>
+</body>
+</html>
